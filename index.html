@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Levi's Physics Simulation</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="description" content="" />
+  <style>
+
+    #canvas {
+      border: 1px solid black;
+      
+    }
+  </style>
+</head>
+<body>
+  <div id="content">
+
+    <p>Levi's Physics Simulation</p>
+    <input id="countInput" type="number" value="1000">
+    <button id="resetBtn">Reset</button>
+    <br>
+    <label for="outsideCanvasCheckbox">Larger bounds</label>
+    <input type="checkbox" id="outsideCanvasCheckbox">
+
+    <label for="particleChargeCheckbox">Charged Particles</label>
+    <input type="checkbox" id="particleChargeCheckbox">
+    <br>
+    <button id="positiveBtn">+</button>
+    <button id="negativeBtn">-</button>
+    <br>
+    <label for="magInput">Magnitude </label>
+    <input id="magInput" type="number" value="1">
+    <br>
+    <canvas id="canvas" width="500px" height="500px"></canvas>
+  </div>
+</body>
+
+<script>
+  
+
+let tracers = true;
+let points = [];
+
+let particles = [];
+
+let tickSpeed = 1;
+const e = 1.6e-19;
+const coulomb = 9e9;
+let hovering = false;
+
+let closestPoint = null;
+let mousedown = false;
+let magAmount = 1;
+let tracerLength = 5;
+
+let outsideCanvasMode = false;
+let particleChargeMode = false;
+
+/*
+ex:
+  x: 5,
+  y: 4,
+  charge: 'neg',
+  mag: 500,
+*/
+
+const canvas = document.querySelector("#canvas");
+const ctx = canvas.getContext('2d');
+
+let selectedCharge = "pos";
+const positiveBtn = document.querySelector("#positiveBtn");
+const negativeBtn = document.querySelector("#negativeBtn");
+const resetBtn = document.querySelector("#resetBtn");
+const magInput = document.querySelector("#magInput");
+const countInput = document.querySelector("#countInput");
+const outsideCanvasCheckbox = document.querySelector("#outsideCanvasCheckbox");
+const particleChargeCheckbox = document.querySelector("#particleChargeCheckbox");
+
+positiveBtn.addEventListener("click", () => {
+  selectedCharge = "pos";
+})
+
+negativeBtn.addEventListener("click", () => {
+  selectedCharge = "neg";
+})
+
+outsideCanvasCheckbox.checked = outsideCanvasMode;
+outsideCanvasCheckbox.addEventListener("click", () => {
+  outsideCanvasMode = !outsideCanvasMode;
+})
+
+
+particleChargeCheckbox.checked = particleChargeMode;
+particleChargeCheckbox.addEventListener("click", () => {
+  particleChargeMode = !particleChargeMode;
+})
+
+
+resetBtn.addEventListener("click", () => {
+  points = [];
+
+  particles = [];
+  if (countInput.value > 0) {
+
+    spawnNew(parseInt(countInput.value));
+  } else {
+    
+    spawnNew(200);
+  }
+})
+
+resizeCanvas();
+spawnNew(1000);
+
+
+
+canvas.addEventListener("mousemove", (e) => {
+  const coord = canvas.getBoundingClientRect();
+  const x = e.clientX - coord.x;
+  const y = e.clientY - coord.y;
+  if (mousedown && hovering) {
+    points[closestPoint].x = x;
+    points[closestPoint].y = y;
+  }
+  let closestDist = Infinity;
+  closestPoint = null;
+  for (let i = 0; i < points.length; i++) {
+    const point = points[i];
+    point.selected = false;
+    const dist = Math.sqrt((point.x - x) ** 2 + (point.y - y) ** 2);
+    if (dist < closestDist) {
+      closestDist = dist;
+      closestPoint = i;
+    }
+  }
+  if (closestPoint !== null && closestDist <= 10) {
+    canvas.style.cursor = "pointer";
+
+    points[closestPoint].selected = true;
+    hovering = true;
+  } else {
+    hovering = false;
+    canvas.style.cursor = "auto";
+  }
+  
+})
+
+canvas.addEventListener("mousedown", (e) => {
+  mousedown = true;
+})
+
+document.body.addEventListener("mouseup", () => {
+  mousedown = false;
+})
+
+canvas.addEventListener("click", (e) => {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const coord = canvas.getBoundingClientRect();
+  const x = e.clientX - coord.x;
+  const y = e.clientY - coord.y;
+  if (!hovering) {
+
+    addPoint(x, y);
+  }
+})
+
+window.addEventListener("resize", () => {
+  resizeCanvas();
+})
+
+
+function addPoint(x, y) {
+  points.push({
+    x: x,
+    y: y,
+    charge: selectedCharge,
+    magE: magAmount,
+    selected: false,
+  });
+
+}
+
+function drawCanvas() {
+  // ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = `rgba(255,255,255,0.05)`;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+
+  
+  const length = particles.length;
+  for (let i = 0 ; i < length; i++) {
+    
+    const particle = particles[i];
+    const l = particle.x.length - 1
+    
+    ctx.beginPath();
+      ctx.strokeStyle = `#c8a4d4`;
+      
+      ctx.moveTo(particle.x[0], particle.y[0]);
+      let allowed = true;
+      let maxLength = 100;
+      for (let i = 0; i < tracerLength; i++) {
+        if (Math.abs(particle.x[i] - particle.x[l]) > maxLength || Math.abs(particle.y[i] - particle.y[l]) > maxLength) {
+          allowed = false;
+          break;
+        }
+      }
+      // allowed = true;
+      if (allowed) {
+        for (let i = 0; i < tracerLength; i++) {
+          ctx.lineTo(particle.x[i], particle.y[i]);
+        }
+
+      }
+      
+    ctx.stroke();
+    ctx.beginPath();
+      ctx.fillStyle = `#643b9f`;
+    ctx.moveTo(particle.x[l], particle.y[l]);
+    ctx.arc(particle.x[l], particle.y[l], 1.75, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  
+  for (let i = 0; i < points.length; i++) {
+    const point = points[i];
+    
+    ctx.beginPath();
+      ctx.fillStyle = (point.charge == "pos") ? "red" : "blue";
+
+      ctx.arc(point.x, point.y, (point.selected ? 16 : 8), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  
+// requestAnimationFrame(drawCanvas);
+}
+
+// setInterval(simulate, 50);
+
+simulate();
+
+function simulate() {
+
+  spawnNew(5);
+  deleteParticle(5);
+  
+  for (let i = 0; i < tickSpeed; i ++) {
+
+    simulateParticles();
+  }
+  drawCanvas();
+  requestAnimationFrame(simulate);
+}
+
+function spawnNew(count) {
+  for (let i = 0; i < count; i++) {
+    const particle = {
+      /*
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height,
+      */
+      x: [],
+      y: [],
+      prevX: 0,
+      prevY: 0,
+      charge: Math.random() * 0.1 - 0.05,
+
+    }
+    let x = Math.random() * canvas.width;
+    let y = Math.random() * canvas.height;
+    if (outsideCanvasMode) {
+      x = x * 3 - (canvas.width * 1.5);
+      y = y * 3 - (canvas.height * 1.5);
+
+    }
+    for (let i = 0; i < tracerLength; i++) {
+      particle.x.push(x);
+      particle.y.push(y);
+    }
+    particles.push(particle);
+  }
+}
+
+function deleteParticle(count) {
+  particles.splice(0, count);
+}
+
+function simulateParticles() {
+  const length = particles.length;
+  const pointsLength = points.length;
+  for (let i = 0 ; i < length; i++) {
+    const particle = particles[i];
+
+    const l = particle.x.length - 1;
+    let x = particle.x[l];
+    let y = particle.y[l];
+    /*
+    particle.prevX = particle.x;
+    particle.prevY = particle.y;
+    */
+
+    if (outsideCanvasMode) {
+      if (x > canvas.width * 3
+      || x < canvas.width * -1.5
+      || y > canvas.height * 3
+      || y < canvas.height * -1.5) {
+        x = Math.random() * canvas.width * 3 - (canvas.width * 1.5);
+        y = Math.random() * canvas.height * 3 - (canvas.height * 1.5);
+      }
+    } else {
+      if (x > canvas.width
+      || x < 0
+      || y > canvas.height
+      || y < 0) {
+        x = Math.random() * canvas.width;
+        y = Math.random() * canvas.height;
+      }
+
+    }
+
+      
+    let netX = 0;
+    let netY = 0;
+    
+    for (let i = 0; i < pointsLength; i++) {
+      const point = points[i];
+
+      const dist = Math.sqrt((point.x - x) ** 2 + (point.y - y) ** 2);
+      const angle = Math.atan2(point.y - y, point.x - x);
+      let xMove = (coulomb * point.magE * e) / (dist ** 2) * 1e13 * Math.cos(angle);
+      let yMove = (coulomb * point.magE * e) / (dist ** 2) * 1e13 * Math.sin(angle);
+      if (point.charge == "pos") {
+        xMove = xMove * -1;
+        yMove = yMove * -1;
+
+      }
+      
+      netX += xMove;
+      netY += yMove;
+    }
+    let xMove2 = 0;
+    let yMove2 = 0;
+
+    if (particleChargeMode) {
+      for (let j = 0; j < particles.length; j++) {
+        const particle2 = particles[j];
+        if (particle2.x[particle2.x.length - 1] - x < 1) {
+          
+          const l = particle2.x.length - 1;
+          if (particle2.y[l] - y < 1) {
+            const particleX = particle2.x[l];
+            const particleY = particle2.y[l];
+            if (particleX === x) {
+              continue;
+            }
+
+            const dist = Math.sqrt((particleX - x) ** 2 + (particleY - y) ** 2);
+            const angle = Math.atan2(particleY - y, particleX - x);
+            let moveX = (coulomb * particle2.charge * e) / (dist ** 2) * 1e13 * Math.cos(angle);
+            let moveY = (coulomb * particle2.charge * e) / (dist ** 2) * 1e13 * Math.sin(angle);
+            
+            if (particle2.charge > 1) {
+              moveX = moveX * -1;
+              moveY = moveY * -1;
+
+            }
+            //console.log(dist);
+            // console.log(netX, x, y, particle2.charge, dist, angle, particleX);
+            xMove2 += moveX;
+            yMove2 += moveY;
+            // console.log(netX);
+            
+          }
+        }
+        
+      }
+
+    }
+    //console.log(xMove2);
+    netX += xMove2;
+    netY += yMove2;
+    const lA = particle.x.length - 1;
+    const xA = particle.x[lA] + netX;
+    const yA = particle.y[lA] + netY;
+    particle.x.push(xA);
+    particle.y.push(yA);
+
+    particle.x.splice(0, 1);
+    particle.y.splice(0, 1);
+
+
+    /*
+    particle.x += netX;
+    particle.y += netY;
+    */
+    
+    /*
+    if (Math.abs(netX) >= 50 || Math.abs(netY) >= 50) {
+      particle.prevX = particle.x;
+      particle.prevY = particle.y;
+    }
+    */
+
+  }
+
+}
+
+function resizeCanvas() {
+  canvas.width = window.innerWidth * 0.7;
+  canvas.height = window.innerHeight * 0.7;
+}
+
+
+magInput.addEventListener("change", () => {
+  magAmount = parseFloat(magInput.value);
+})
+</script>
+</html>
